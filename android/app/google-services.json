@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "590892819166",
+    "project_id": "pastelaria-6866c",
+    "storage_bucket": "pastelaria-6866c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:590892819166:android:d451af0e250f6bd9be184f",
+        "android_client_info": {
+          "package_name": "com.example.pastelaria"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyALx8y05YxL48eZxIeliEbinimLNE-wZL4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
