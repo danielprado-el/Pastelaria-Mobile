@@ -23,7 +23,6 @@ class Autenticador {
   static Future<Usuario> login() async {
     final gUser = await GoogleSignIn().signIn();
     final usuario = Usuario(gUser!.displayName, gUser.email);
-    // final usuario = Usuario("Avemarilson da Silva", "avema_2002@gmail.com");
 
     return usuario;
   }
@@ -40,7 +39,6 @@ class Autenticador {
         usuario = Usuario(gUser.displayName, gUser.email);
       }
     }
-    // final usuario = Usuario("Avemarilson da Silva", "avema_2002@gmail.com");
 
     return usuario;
   }
