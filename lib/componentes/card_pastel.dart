@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pastelaria/apis/servicos.dart';
 import 'package:pastelaria/estado.dart';
 
 class CardPastel extends StatefulWidget {
@@ -16,10 +17,10 @@ class CardPastelState extends State<CardPastel> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-        height: 350,
+        height: 330,
         child: GestureDetector(
             onTap: () {
-              estadoApp.mostrarDetalhes(widget.pastel["_id"]);
+              estadoApp.mostrarDetalhes(widget.pastel["pastel_id"]);
             },
             child: Card(
               surfaceTintColor: Colors.orange,
@@ -30,42 +31,39 @@ class CardPastelState extends State<CardPastel> {
                       borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(15.0),
                           topRight: Radius.circular(15.0)),
-                      child: Image.asset('assets/imgs/pastel.jpg')),
-                  Row(children: [
-                    Image.asset('assets/imgs/pastelLogo.png', width: 38),
-                    Padding(
-                        padding: const EdgeInsets.only(left: 10.0, bottom: 5.0),
-                        child: Text(
-                          widget.pastel["pastelaria"]["nome"],
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 15),
-                        ))
-                  ]),
+                      child: Image.network(
+                          caminhoArquivo(widget.pastel['imagem1']))),
                   Padding(
                     padding: const EdgeInsets.all(10.0),
-                    child: Text(
-                      widget.pastel["pastel"]["nome"],
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
+                    child: Row(children: [
+                      Image.network(caminhoArquivo(widget.pastel["avatar"]),
+                          width: 34),
+                      Padding(
+                          padding: const EdgeInsets.only(left: 5),
+                          child: Text(
+                            widget.pastel["nome_pastel"],
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 14),
+                          )),
+                    ]),
                   ),
                   Padding(
                     padding:
                         const EdgeInsets.only(left: 10.0, top: 5, bottom: 10),
                     child: Text(
-                      widget.pastel["pastel"]["descricao"],
+                      widget.pastel["descricao"],
                     ),
                   ),
                   Row(children: [
                     Padding(
                       padding: const EdgeInsets.only(left: 10.0),
                       child: Text(
-                        "R\$ ${widget.pastel["pastel"]["preco"].toString()}",
+                        "R\$ ${widget.pastel["preco"].toString()}",
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.only(left: 90.0),
+                      padding: const EdgeInsets.only(left: 80.0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -75,7 +73,7 @@ class CardPastelState extends State<CardPastel> {
                             size: 18,
                           ),
                           Text(
-                            widget.pastel["likes"].toString(),
+                            widget.pastel["curtidas"].toString(),
                           ),
                         ],
                       ),

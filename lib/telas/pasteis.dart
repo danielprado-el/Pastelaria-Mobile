@@ -1,14 +1,12 @@
-import 'dart:convert';
-
 import 'package:flat_list/flat_list.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:pastelaria/apis/servicos.dart';
 import 'package:pastelaria/autentificador.dart';
 import 'package:pastelaria/componentes/card_pastel.dart';
 import 'package:pastelaria/estado.dart';
 
-const tamanhoPagina = 4;
+const TAMANHO_DA_PAGINA = 4;
 
 class Pasteis extends StatefulWidget {
   const Pasteis({super.key});
@@ -18,7 +16,6 @@ class Pasteis extends StatefulWidget {
 }
 
 class PasteisState extends State<Pasteis> {
-  late dynamic _feedEstatico;
   List<dynamic> _pasteis = [];
 
   String _filtro = "";
@@ -27,12 +24,15 @@ class PasteisState extends State<Pasteis> {
   bool _carregando = false;
   int _proximaPagina = 1;
 
+  late ServicoPasteis _servicoPasteis;
+
   @override
   void initState() {
-    _lerFeedEstatico();
     _controladorFiltro = TextEditingController();
-
     _recuperarUsuarioLogado();
+
+    _servicoPasteis = ServicoPasteis();
+    _carregarPasteis();
 
     super.initState();
   }
@@ -47,46 +47,34 @@ class PasteisState extends State<Pasteis> {
     });
   }
 
-  Future<void> _lerFeedEstatico() async {
-    final stringJson = await rootBundle.loadString('assets/json/feed.json');
-    _feedEstatico = await json.decode(stringJson);
-
-    _carregarPasteis();
-  }
-
   void _carregarPasteis() {
     setState(() {
       _carregando = true;
     });
 
-    var maisPasteis = [];
-
     if (_filtro.isNotEmpty) {
-      List<dynamic> pasteis = _feedEstatico['pasteis'];
+      _servicoPasteis
+          .findPasteis(_proximaPagina, TAMANHO_DA_PAGINA, _filtro)
+          .then((pasteis) {
+        setState(() {
+          _carregando = false;
+          _proximaPagina += 1;
 
-      pasteis.where((item) {
-        String nomePastel = item['pastel']['nome'];
-        return nomePastel.toLowerCase().contains(_filtro.toLowerCase());
-      }).forEach((item) {
-        maisPasteis.add(item);
+          _pasteis.addAll(pasteis);
+        });
       });
     } else {
-      maisPasteis = _pasteis;
-      final totalDeFeedsParaCarregar = _proximaPagina * tamanhoPagina;
-      if (_feedEstatico['pasteis'].length >= totalDeFeedsParaCarregar) {
-        maisPasteis =
-            _feedEstatico['pasteis'].sublist(0, totalDeFeedsParaCarregar);
-      } else {
-        maisPasteis = _feedEstatico['pasteis'];
-      }
+      _servicoPasteis
+          .getPasteis(_proximaPagina, TAMANHO_DA_PAGINA)
+          .then((pasteis) {
+        setState(() {
+          _carregando = false;
+          _proximaPagina += 1;
+
+          _pasteis.addAll(pasteis);
+        });
+      });
     }
-
-    setState(() {
-      _carregando = false;
-      _proximaPagina += 1;
-
-      _pasteis = maisPasteis;
-    });
   }
 
   Future<void> _atualizarPasteis() async {

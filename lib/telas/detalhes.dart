@@ -1,14 +1,14 @@
-import 'dart:convert';
-
 import 'package:flat_list/flat_list.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:keyboard_visibility_pro/keyboard_visibility_pro.dart';
+import 'package:pastelaria/apis/servicos.dart';
 import 'package:page_view_dot_indicator/page_view_dot_indicator.dart';
-import 'package:pastelaria/estado.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
-const tamanhoPagina = 4;
+import '../estado.dart';
+
+const TAMANHO_DA_PAGINA = 4;
 
 class Detalhes extends StatefulWidget {
   const Detalhes({super.key});
@@ -18,9 +18,6 @@ class Detalhes extends StatefulWidget {
 }
 
 class DetalhesState extends State<Detalhes> {
-  late dynamic _feedEstatico;
-  late dynamic _comentariosEstaticos;
-
   late PageController _controladorSlides;
   late int _slideSelecionado;
 
@@ -37,12 +34,22 @@ class DetalhesState extends State<Detalhes> {
   bool _curtiu = false;
   bool _tecladoVisivel = false;
 
+  late ServicoPasteis _servicoPasteis;
+  late ServicoCurtidas _servicoCurtidas;
+  late ServicoComentarios _servicoComentarios;
+
   @override
   void initState() {
-    _lerBancoEstatico();
     _iniciarSlides();
 
     _controladorNovoComentario = TextEditingController();
+
+    _servicoPasteis = ServicoPasteis();
+    _servicoCurtidas = ServicoCurtidas();
+    _servicoComentarios = ServicoComentarios();
+
+    _carregarPastel();
+    _carregarComentarios();
 
     super.initState();
   }
@@ -52,25 +59,28 @@ class DetalhesState extends State<Detalhes> {
     _controladorSlides = PageController(initialPage: _slideSelecionado);
   }
 
-  Future<void> _lerBancoEstatico() async {
-    String stringJson = await rootBundle.loadString('assets/json/feed.json');
-    _feedEstatico = await json.decode(stringJson);
-
-    stringJson = await rootBundle.loadString('assets/json/comentarios.json');
-    _comentariosEstaticos = await json.decode(stringJson);
-
-    _carregarPastel();
-    _carregarComentarios();
-  }
-
   void _carregarPastel() {
-    _pastel = _feedEstatico['pasteis']
-        .firstWhere((pastel) => pastel['_id'] == estadoApp.idPastel);
+    _servicoPasteis.findPastel(estadoApp.idPastel).then((pastel) {
+      _pastel = pastel;
 
-    setState(() {
-      _temPastel = _pastel != null;
+      if (estadoApp.usuario != null) {
+        _servicoCurtidas
+            .curtiu(estadoApp.usuario!, estadoApp.idPastel)
+            .then((curtiu) {
+          setState(() {
+            _temPastel = _pastel != null;
+            _curtiu = curtiu;
 
-      _carregandoComentarios = false;
+            _carregandoComentarios = false;
+          });
+        });
+      } else {
+        setState(() {
+          _temPastel = _pastel != null;
+
+          _carregandoComentarios = false;
+        });
+      }
     });
   }
 
@@ -79,26 +89,16 @@ class DetalhesState extends State<Detalhes> {
       _carregandoComentarios = true;
     });
 
-    var maisComentarios = [];
-    _comentariosEstaticos['comentarios'].where((item) {
-      return item['feed'] == estadoApp.idPastel;
-    }).forEach((item) {
-      maisComentarios.add(item);
-    });
+    _servicoComentarios
+        .getComentarios(estadoApp.idPastel, _proximaPagina, TAMANHO_DA_PAGINA)
+        .then((comentarios) {
+      setState(() {
+        _comentarios.addAll(comentarios);
+        _temComentarios = _comentarios.isNotEmpty;
+        _proximaPagina += 1;
 
-    final totalDeComentariosParaCarregar = _proximaPagina * tamanhoPagina;
-    if (maisComentarios.length >= totalDeComentariosParaCarregar) {
-      maisComentarios =
-          maisComentarios.sublist(0, totalDeComentariosParaCarregar);
-    }
-
-    setState(() {
-      _temComentarios = maisComentarios.isNotEmpty;
-      _comentarios = maisComentarios;
-
-      _proximaPagina += 1;
-
-      _carregandoComentarios = false;
+        _carregandoComentarios = false;
+      });
     });
   }
 
@@ -110,21 +110,26 @@ class DetalhesState extends State<Detalhes> {
   }
 
   void _adicionarComentario() {
-    if (estadoApp.usuario != null) {
-      final comentario = {
-        "content": _controladorNovoComentario.text,
-        "user": {
-          "name": estadoApp.usuario!.nome,
-          "email": estadoApp.usuario!.email,
-        },
-        "datetime": DateTime.now().toString(),
-        "feed": estadoApp.idPastel
-      };
+    _servicoComentarios
+        .adicionar(estadoApp.idPastel, estadoApp.usuario!,
+            _controladorNovoComentario.text)
+        .then((resultado) {
+      if (resultado["situacao"] == "ok") {
+        Fluttertoast.showToast(msg: "comentário adicionado");
 
-      setState(() {
-        _comentarios.insert(0, comentario);
-      });
-    }
+        _atualizarComentarios();
+      }
+    });
+  }
+
+  void _removerComentario(int idComentario) {
+    _servicoComentarios.remover(idComentario).then((resultado) {
+      if (resultado["situacao"] == "ok") {
+        Fluttertoast.showToast(msg: "comentário removido com sucesso");
+
+        _atualizarComentarios();
+      }
+    });
   }
 
   String _formatarData(String dataHora) {
@@ -182,9 +187,14 @@ class DetalhesState extends State<Detalhes> {
               },
               onEndReachedDelta: 200,
               buildItem: (item, int index) {
+                bool usuarioLogadoComentou = estadoApp.temUsuarioLogado() &&
+                    item["conta"] == estadoApp.usuario!.email;
+
                 return Dismissible(
-                    key: Key(_comentarios[index]['_id'].toString()),
-                    direction: DismissDirection.endToStart,
+                    key: UniqueKey(),
+                    direction: usuarioLogadoComentou
+                        ? DismissDirection.endToStart
+                        : DismissDirection.none,
                     background: Container(
                         color: Colors.red,
                         child: const Align(
@@ -194,11 +204,6 @@ class DetalhesState extends State<Detalhes> {
                                 child: Icon(Icons.delete)))),
                     onDismissed: (direction) {
                       if (direction == DismissDirection.endToStart) {
-                        final comentario = _comentarios[index];
-                        setState(() {
-                          _comentarios.removeAt(index);
-                        });
-
                         showDialog(
                             context: context,
                             builder: (BuildContext contexto) {
@@ -209,8 +214,7 @@ class DetalhesState extends State<Detalhes> {
                                   TextButton(
                                       onPressed: () {
                                         setState(() {
-                                          _comentarios.insert(
-                                              index, comentario);
+                                          _carregarComentarios();
                                         });
 
                                         Navigator.of(contexto).pop();
@@ -218,7 +222,8 @@ class DetalhesState extends State<Detalhes> {
                                       child: const Text("não")),
                                   TextButton(
                                       onPressed: () {
-                                        setState(() {});
+                                        _removerComentario(
+                                            item["comentario_id"]);
 
                                         Navigator.of(contexto).pop();
                                       },
@@ -236,7 +241,7 @@ class DetalhesState extends State<Detalhes> {
                             Padding(
                                 padding: const EdgeInsets.all(6.0),
                                 child: Text(
-                                  _comentarios[index]["content"],
+                                  item["comentario"],
                                   style: const TextStyle(fontSize: 12),
                                 )),
                             Padding(
@@ -247,15 +252,14 @@ class DetalhesState extends State<Detalhes> {
                                         padding: const EdgeInsets.only(
                                             right: 10.0, left: 6.0),
                                         child: Text(
-                                          _comentarios[index]["user"]["name"],
+                                          item["nome"],
                                           style: const TextStyle(fontSize: 12),
                                         )),
                                     Padding(
                                         padding:
                                             const EdgeInsets.only(right: 10.0),
                                         child: Text(
-                                          _formatarData(
-                                              _comentarios[index]["datetime"]),
+                                          _formatarData(item["data"]),
                                           style: const TextStyle(fontSize: 12),
                                         )),
                                   ],
@@ -271,8 +275,20 @@ class DetalhesState extends State<Detalhes> {
     ];
   }
 
+  List<String> _imagensDoSlide() {
+    List<String> imagens = [];
+
+    imagens.add(_pastel["imagem1"]);
+    if ((_pastel["imagem2"] as String).isNotEmpty) {
+      imagens.add(_pastel["imagem2"]);
+    }
+
+    return imagens;
+  }
+
   Widget _exibirPastel() {
     List<Widget> widgets = [];
+    final slides = _imagensDoSlide();
 
     if (!_tecladoVisivel) {
       widgets.addAll([
@@ -280,7 +296,7 @@ class DetalhesState extends State<Detalhes> {
           height: 230,
           child: Stack(children: [
             PageView.builder(
-              itemCount: 2,
+              itemCount: slides.length,
               controller: _controladorSlides,
               onPageChanged: (slide) {
                 setState(() {
@@ -288,12 +304,10 @@ class DetalhesState extends State<Detalhes> {
                 });
               },
               itemBuilder: (context, pagePosition) {
-                List<String> imagens = [
-                  'assets/imgs/pastel.jpg',
-                  'assets/imgs/pastel2.jpg'
-                ];
-
-                return Image.asset(imagens[pagePosition], fit: BoxFit.cover);
+                return Image.network(
+                  caminhoArquivo(slides[pagePosition]),
+                  fit: BoxFit.cover,
+                );
               },
             ),
             Align(
@@ -303,16 +317,32 @@ class DetalhesState extends State<Detalhes> {
                       ? IconButton(
                           onPressed: () {
                             if (_curtiu) {
-                              setState(() {
-                                _pastel['likes'] = _pastel['likes'] - 1;
+                              _servicoCurtidas
+                                  .descurtir(
+                                      estadoApp.usuario!, estadoApp.idPastel)
+                                  .then((resultado) {
+                                if (resultado["situacao"] == "ok") {
+                                  Fluttertoast.showToast(
+                                      msg: "avaliação removida");
 
-                                _curtiu = false;
+                                  setState(() {
+                                    _carregarPastel();
+                                  });
+                                }
                               });
                             } else {
-                              setState(() {
-                                _pastel['likes'] = _pastel['likes'] + 1;
+                              _servicoCurtidas
+                                  .curtir(
+                                      estadoApp.usuario!, estadoApp.idPastel)
+                                  .then((resultado) {
+                                if (resultado["situacao"] == "ok") {
+                                  Fluttertoast.showToast(
+                                      msg: "obrigado pela sua avaliação");
 
-                                _curtiu = true;
+                                  setState(() {
+                                    _carregarPastel();
+                                  });
+                                }
                               });
                             }
                           },
@@ -329,7 +359,7 @@ class DetalhesState extends State<Detalhes> {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: PageViewDotIndicator(
             currentItem: _slideSelecionado,
-            count: 2,
+            count: slides.length,
             unselectedColor: Colors.black26,
             selectedColor: Colors.orange,
             duration: const Duration(milliseconds: 200),
@@ -345,7 +375,7 @@ class DetalhesState extends State<Detalhes> {
                   ? Padding(
                       padding: const EdgeInsets.all(6.0),
                       child: Text(
-                        _pastel["pastel"]["nome"],
+                        _pastel["nome_pastel"],
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 13),
                       ))
@@ -353,7 +383,7 @@ class DetalhesState extends State<Detalhes> {
               _temPastel
                   ? Padding(
                       padding: const EdgeInsets.all(4.0),
-                      child: Text(_pastel["pastel"]["descricao"],
+                      child: Text(_pastel["descricao"],
                           style: const TextStyle(fontSize: 12)))
                   : const SizedBox.shrink(),
               _temPastel
@@ -361,7 +391,7 @@ class DetalhesState extends State<Detalhes> {
                       padding: const EdgeInsets.only(left: 8.0, bottom: 6.0),
                       child: Row(children: [
                         Text(
-                          "R\$ ${_pastel["pastel"]["preco"].toString()}",
+                          "R\$ ${_pastel["preco"].toString()}",
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 12),
                         ),
@@ -376,7 +406,7 @@ class DetalhesState extends State<Detalhes> {
                                     size: 18,
                                   ),
                                   Text(
-                                    _pastel["likes"].toString(),
+                                    _pastel["curtidas"].toString(),
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12),
@@ -397,11 +427,11 @@ class DetalhesState extends State<Detalhes> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: Row(children: [
           Row(children: [
-            Image.asset('assets/imgs/pastelLogo.png', width: 38),
+            Image.network(caminhoArquivo(_pastel["avatar"]), width: 38),
             Padding(
                 padding: const EdgeInsets.only(left: 10.0, bottom: 5.0),
                 child: Text(
-                  _pastel["pastelaria"]["nome"],
+                  _pastel["nome_pastel"],
                   style: const TextStyle(fontSize: 15),
                 ))
           ]),
